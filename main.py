@@ -5,7 +5,7 @@ from sessions import GetAccessToken #, send_start
 from pathlib import Path
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from parser import MRKT
+from parser import MRKT, PORTALS
 from subs import SubscriptionIndex, init_db
 
 from bot import bot, run_bot
@@ -29,25 +29,33 @@ async def init_starting_sniper():
     init_db()
     index = SubscriptionIndex.load_from_db()
 
-    #await update_tokens()
-    mrkt_tokens = ['f62ef789-d292-4074-95d6-3218add81066', 'f6b39ef7-8307-4b40-a4f4-24cc81d8ded1', '5f07b980-65fb-4b35-9caf-0d82716224ea', 'f107ebe8-dee2-4160-8ac5-edbc2f8a95b6', 'dbf9f453-0d5c-450c-86dd-45df3b34d93a', '62d0f148-1a1c-467b-89ec-a974bd4a96ac', '22add721-93a0-4954-93f0-6c0a90104540', '72acd4da-a788-4d4a-ab13-3e78c30c796a']
-    await workers()
+    #t_update_tokens = asyncio.create_task(update_tokens())
+    t_workers = asyncio.create_task(workers())
+    mrkt_tokens = ['da1d9ce0-cbee-41af-b4b7-567f610984f9', 'd04f532f-1bc9-4312-a25f-42671d53a8fa', '003e5d96-8855-48d8-8e4d-391387302556', '825d639e-e09d-43ce-9238-3605183cbbb0', 'efaeaff5-9427-4e08-ba66-6f20a1f1f3f5', 'e73b6037-5a1d-4ecc-b3b2-182ded1abb64', '6e902ed1-41da-4183-b7c1-786397f48f3e', '1719f5be-6d26-4a9b-bf7a-24cb259c06f8']
+    portals_tokens = ['user=%7B%22id%22%3A8499324587%2C%22first_name%22%3A%22Eylcqwhy%22%2C%22last_name%22%3A%22Irkcfkger%22%2C%22language_code%22%3A%22en%22%2C%22allows_write_to_pm%22%3Atrue%2C%22photo_url%22%3A%22https%3A%5C%2F%5C%2Ft.me%5C%2Fi%5C%2Fuserpic%5C%2F320%5C%2FjV5WM2HfaLBhRJx-H6pVQc5Ug68AJnnSYSby5feLLbgVrIVTXlGRQ1RZZorwoKZq.svg%22%7D&chat_instance=-187287761988689160&chat_type=sender&auth_date=1784468875&signature=dmnl3of-DSnrdJOi0zybfjYkKhNZANn_Dv3B-Wt9os8-CZHofjt2zlHrjCl4F8peuAc-v0dGhP28uu9QvPQaDg&hash=9deba20f7efa3edf6522143fac1fa46dcf1bcce8c66601b1449d06355f14c273', 'user=%7B%22id%22%3A8960845243%2C%22first_name%22%3A%22Evcmzbocp%22%2C%22last_name%22%3A%22Fnvlbjvh%22%2C%22language_code%22%3A%22en%22%2C%22allows_write_to_pm%22%3Atrue%2C%22photo_url%22%3A%22https%3A%5C%2F%5C%2Ft.me%5C%2Fi%5C%2Fuserpic%5C%2F320%5C%2F0P0nNN3kO13ku-v0MOQ93I3D5y7HbGIat4zl90By_RW-8lFj5IjTedJlHp4eLlvR.svg%22%7D&chat_instance=-545744855795923050&chat_type=sender&auth_date=1784468880&signature=8jkq5B9iHP8BqU0Pa8ZOJxUyjMbQwKFsUbup0jkn7RX55MecW4xm4lJCsxIC20WuHpul-Vg3qKxbEmJ-BDbHCQ&hash=dbc9d2b11a775d2571fddc82ea06d5b6914d7c44a44f8e6606d8d17a6a60f5cd', 'user=%7B%22id%22%3A8639256882%2C%22first_name%22%3A%22Otzsgoyhxf%22%2C%22last_name%22%3A%22Kjrsozm%22%2C%22language_code%22%3A%22en%22%2C%22allows_write_to_pm%22%3Atrue%2C%22photo_url%22%3A%22https%3A%5C%2F%5C%2Ft.me%5C%2Fi%5C%2Fuserpic%5C%2F320%5C%2F_Z54KKT_ktyIcEB2tTBtAJI1gMQ4v9--OFzrICl9d9Fy2ERj2P7WU-GU2WBBu7uP.svg%22%7D&chat_instance=3357285449342166869&chat_type=sender&auth_date=1784468885&signature=dS_JKcWwXmRTp-_gxED1pyFp2t_t6QLVAf9pr3qF37M3eO_4CtnE0DEj5klLG53Zgjt54LDmLqGuRWqx1Pa5Bw&hash=e9bce15094326bc2ac56f7cc2063c00390cef6e6584f4b36a1fe2be0c6f83ff3', 'user=%7B%22id%22%3A8847053015%2C%22first_name%22%3A%22Lysgtyv%22%2C%22last_name%22%3A%22Ljimyji%22%2C%22language_code%22%3A%22en%22%2C%22allows_write_to_pm%22%3Atrue%2C%22photo_url%22%3A%22https%3A%5C%2F%5C%2Ft.me%5C%2Fi%5C%2Fuserpic%5C%2F320%5C%2Fbd8pWh95LLU2Vz5zzvFyAbMTizFlONEJg6e6I4BTE7yymoaPZyX3sgU4zrThvNd8.svg%22%7D&chat_instance=-1886900002058415822&chat_type=sender&auth_date=1784468890&signature=4Um8xavLYB7Sw4Hm53XZntKs4dNFw4hNgJqujrfu6NOOPw7wfmtNlt-VGxe-Rg5Qrir9updmFXd7msYJyXD6Dw&hash=e43d74059a5ffb0079b7d738dcbddf4488779cbf2d3351a31d71931e9589be47', 'user=%7B%22id%22%3A8954575948%2C%22first_name%22%3A%22Xzvjvrg%22%2C%22last_name%22%3A%22Nstopdhisi%22%2C%22language_code%22%3A%22en%22%2C%22allows_write_to_pm%22%3Atrue%2C%22photo_url%22%3A%22https%3A%5C%2F%5C%2Ft.me%5C%2Fi%5C%2Fuserpic%5C%2F320%5C%2F3_W7nuTV1Hd0EyRtzMZbsAbo3YdD5Yf9JNfLhHLgq15Tw8BFDHhMcO4NyngDLdZn.svg%22%7D&chat_instance=8352236978508663024&chat_type=sender&auth_date=1784468895&signature=B0BDRWODaiIwPB2YBbiD_kllN8SUi7FNgqrY_jH8UPDeTkF8nPqplQjX9HEPnGys4RKm4bINuujSglsT0YEsAA&hash=ad8e6bd6af3c681c7b56ccb5b967efd3095cfaf7f1d3a9d6439ebd7fb12db78e', 'user=%7B%22id%22%3A8677609089%2C%22first_name%22%3A%22Pgygbdqqwh%22%2C%22last_name%22%3A%22Mhjkwsw%22%2C%22language_code%22%3A%22en%22%2C%22allows_write_to_pm%22%3Atrue%2C%22photo_url%22%3A%22https%3A%5C%2F%5C%2Ft.me%5C%2Fi%5C%2Fuserpic%5C%2F320%5C%2Fm6idgJfTJ3URFPZ6LGbvg2xyVhXKojoH979aW3RdJP4PdpB1p8ixsc7N7eke2IGx.svg%22%7D&chat_instance=3987120483861772860&chat_type=sender&auth_date=1784468900&signature=E5sKI7wgpGU7c5CLc7LL0g-EtKXR_8Y4Ox31YFnOB_gqDZFOUGcF7k75AGJCHcnC-YqF3GJspFgwx4VtQi2vAw&hash=b45a8b1da287345583fadc2f6d71523fce723bfa29c539d0a5a14678a3c24d04', 'user=%7B%22id%22%3A8864901554%2C%22first_name%22%3A%22Bnipuc%22%2C%22last_name%22%3A%22Vxzbjuwgx%22%2C%22language_code%22%3A%22en%22%2C%22allows_write_to_pm%22%3Atrue%2C%22photo_url%22%3A%22https%3A%5C%2F%5C%2Ft.me%5C%2Fi%5C%2Fuserpic%5C%2F320%5C%2F2XuFApopmd_T2CgQG3eGSgxiSq_-gPC3SFQQmCWyHmLUf_HU2O5KbmfR65lASPhS.svg%22%7D&chat_instance=-1933637180793937841&chat_type=sender&auth_date=1784468905&signature=uwwGzLQqOgCjY-fdBysm2Gu7jjcr7GaVcb7Pjj-SwfsBzUL5lQOR1FsSOQt6OV_s1MnNbwHbv2DMBXUJaxFYCA&hash=5f86cad3f701c930fa7af6a5d5d455f6efe1ecb51e9d7d62cc5aadbe4d2af79b', 'user=%7B%22id%22%3A8623074750%2C%22first_name%22%3A%22Zefaawj%22%2C%22last_name%22%3A%22Wbwenviaz%22%2C%22language_code%22%3A%22en%22%2C%22allows_write_to_pm%22%3Atrue%2C%22photo_url%22%3A%22https%3A%5C%2F%5C%2Ft.me%5C%2Fi%5C%2Fuserpic%5C%2F320%5C%2FAf4tuRVm51QNHD4mqck1wIyR5L3xnH-24P_3prnLBLXDJix93GgvxEqJbEkBitqH.svg%22%7D&chat_instance=-1591702332820171052&chat_type=sender&auth_date=1784468911&signature=rz4azXlSf9nkBkEOYwjp3W5-Lrlas8i_mESGIf-gUagc6wQQyu0eJMfB0s2dPX2DJCCCvke0otOngt7DkLCODA&hash=ff8fa8749a95570988177367602082a2bb7a8a4e43eb151abb43305ae66e1a66']
+
+    await asyncio.gather(t_workers) # await asyncio.gather(t_update_tokens, t_workers)
 
     print(mrkt_tokens)
+    print(portals_tokens)
 
 
     # ---------- Create Classes ---------- #
-    mrkt = MRKT(bot=bot, tokens=mrkt_tokens, buy_token="f034640b-8830-4fbb-8654-8d913c7acadc", poll_delay=0.2)
+    mrkt = MRKT(bot=bot, tokens=mrkt_tokens, buy_token="f80efbfe-133b-4489-b5cd-ee5a8cdeb9d5", poll_delay=0.2)
     await mrkt.update_parse_sessions()
+
+    portals = PORTALS(bot=bot, tokens=portals_tokens, buy_token="query_id=AAEXn24_AgAAABefbj9QytNT&user=%7B%22id%22%3A5359181591%2C%22first_name%22%3A%22Lucas%20%5BLux%5D%22%2C%22last_name%22%3A%22%22%2C%22username%22%3A%22Lcs_Dev%22%2C%22language_code%22%3A%22ru%22%2C%22is_premium%22%3Atrue%2C%22allows_write_to_pm%22%3Atrue%2C%22photo_url%22%3A%22https%3A%5C%2F%5C%2Ft.me%5C%2Fi%5C%2Fuserpic%5C%2F320%5C%2Fn_ScL8h4Z6CCDOksKKH9vBt0qsE3ckMsdn8Wna6_KrYfO65lBFt4PBCOV0GSq5r_.svg%22%7D&auth_date=1784468696&signature=l1E3jvKiafwdziEvJPk9GqqTJkGLmEkPzr00qUCPvzvSDG0nujHm_Wxvm1YwYgOp091DMrYBUeOpzC5xyP2oDg&hash=aae5b79716e90106b1517a6a7f0be4cb6507c5bfe6e5250e29111919c2dfd509", poll_delay=0.1)
+    await portals.update_parse_sessions()
 
     # ---------- Pooling + Bot ---------- #
     task_bot = asyncio.create_task(run_bot(index))
     task_mrkt = asyncio.create_task(mrkt.pooling(index=index))
+    task_portals = asyncio.create_task(portals.pooling(index=index))
 
     try:
-        await asyncio.gather(task_bot, task_mrkt)
+        await asyncio.gather(task_bot, task_mrkt, task_portals)
     finally:
-        for task in (task_bot, task_mrkt):
+        for task in (task_bot, task_mrkt, task_portals):
             if not task.done():
                 task.cancel()
                 try:
@@ -57,6 +65,9 @@ async def init_starting_sniper():
 
         await mrkt.close_sessions()
         logging.info("MRKT | Все HTTP-сессии закрыты")
+
+        await portals.close_sessions()
+        logging.info("PORTALS | Все HTTP-сессии закрыты")
 
 
 
@@ -80,7 +91,12 @@ async def update_tokens():
         mrkt_token = await session.mrkt()
         if mrkt_token:
             mrkt_tokens.append(mrkt_token)
-        """# TODO portals and tonnel"""
+
+        portals_token = await session.portals()
+        if portals_token:
+            portals_tokens.append(portals_token)
+
+        """# TODO tonnel"""
 
 
 async def workers():

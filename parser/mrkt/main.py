@@ -242,11 +242,12 @@ class MRKT:
                     logging.info(f"✅ [SUCCESS] Покупка успешно совершена! Ответ сервера: {res_data}")
                     text = (
                         f"NEW BUY!!!\n\n"
-                        f"<a href='https://t.me/nft/{res_data[0].get('userGift').get('name')}'>GIFT</a> bought for {gift.price}"
+                        f"<a href='https://t.me/nft/{res_data[0].get('userGift').get('name')}'>GIFT</a> bought for {gift.price}\n"
                         f"Collection: {gift.collection}\n"
                         f"Model: {gift.model}\n"
                         f"Backdrop: {gift.backdrop}\n"
                         f"Symbol: {gift.pattern}\n\n"
+                        f"Market: MRKT"
                     )
                     await self.bot.send_message(5359181591, text=text, parse_mode='HTML')
                 elif response.status == 401:

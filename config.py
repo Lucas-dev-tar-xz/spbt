@@ -59,3 +59,10 @@ telegram_bots = [
 
 user_agent = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
 "(KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36")
+
+
+LOGS: int = -1004341936393
+CHANGES_CHAT: int = -1003993068793
+CHANGES_CHAT_MRKT: int = 2
+CHANGES_CHAT_PORTALS: int = 3
+CHANGES_CHAT_TONNEL: int = 4

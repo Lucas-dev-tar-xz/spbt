@@ -1,4 +1,4 @@
-import .mrkt
+from .mrkt import MRKT
 
 
-__all__ = []
+__all__ = [MRKT]

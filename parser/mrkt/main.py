@@ -136,7 +136,7 @@ class MRKT:
                     logging.warning(f"MRKT | Ошибка во время парсинга feed: {response.status}")
         except MyError as e:
             text = (f"#error #error_mrkt #parse\n"
-                    f"{datetime.now().strftime("%H:%M:%S %d.%m.%Y")}\n\n"
+                    f"{datetime.now().strftime('%H:%M:%S %d.%m.%Y')}\n\n"
                     f"WH: {e}")
 
             await self.bot.send_message(LOGS, text=text)

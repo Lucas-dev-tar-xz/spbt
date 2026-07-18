@@ -120,6 +120,41 @@ def deactivate_subscription_db(sub_id: int, path: str = DB_PATH) -> None:
         conn.commit()
 
 
+def load_all_subscriptions(path: str = DB_PATH) -> list[Subscription]:
+    with closing(sqlite3.connect(path)) as conn:
+        rows = conn.execute("""
+            SELECT id, user_id, collection, model, backdrop, pattern, max_price, is_active
+            FROM subscriptions
+            ORDER BY id DESC
+        """).fetchall()
+    return [_row_to_sub(r) for r in rows]
+
+
+def get_subscription_db(sub_id: int, path: str = DB_PATH) -> Subscription | None:
+    with closing(sqlite3.connect(path)) as conn:
+        row = conn.execute("""
+            SELECT id, user_id, collection, model, backdrop, pattern, max_price, is_active
+            FROM subscriptions WHERE id = ?
+        """, (sub_id,)).fetchone()
+    return _row_to_sub(row) if row else None
+
+
+def format_subscription(sub: Subscription) -> str:
+    def field(label: str, value: str | None) -> str:
+        display = value if value else "любой"
+        return f"  • {label}: <b>{display}</b>"
+
+    status = "✅ активна" if sub.is_active else "⏸ деактивирована"
+    return (
+        f"<b>Подписка #{sub.id}</b> ({status})\n"
+        f"{field('Коллекция', sub.collection)}\n"
+        f"{field('Модель', sub.model)}\n"
+        f"{field('Фон', sub.backdrop)}\n"
+        f"{field('Узор', sub.pattern)}\n"
+        f"  • Макс. цена: <b>{sub.max_price:g} TON</b>"
+    )
+
+
 # --------------------------------------------------------------------------
 # In-memory индекс — hot path
 # --------------------------------------------------------------------------
@@ -198,6 +233,10 @@ class SubscriptionIndex:
 
     def should_buy(self, gift: Gift) -> bool:
         return bool(self.find_matches(gift))
+
+    @property
+    def active_count(self) -> int:
+        return len(self._by_id)
 
 
 # --------------------------------------------------------------------------

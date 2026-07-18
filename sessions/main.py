@@ -21,11 +21,24 @@ logging.getLogger("pyrogram").setLevel(logging.WARNING)
 
 
 
-async def mrkt_(session, api_id = 2040, api_hash = "b18441a1ff607e10a989891a5462e627"):
+async def mrkt_(session_path: Path, api_id: int | None = None, api_hash: str | None = None):
     mrkt = config.Bots.mrkt
+    directory = session_path.parent
+    name_num = session_path.stem
+    session_name = str(directory / name_num)
+    account_json = directory / f"{name_num}.json"
+
+    if account_json.exists():
+        with open(account_json, "r") as file:
+            data = json.load(file)
+        api_id = api_id or data.get("api_id", 2040)
+        api_hash = api_hash or data.get("api_hash", "b18441a1ff607e10a989891a5462e627")
+    else:
+        api_id = api_id or 2040
+        api_hash = api_hash or "b18441a1ff607e10a989891a5462e627"
 
     async def get_init_data(bot_username: str, app_short_name: str):
-        async with Client(session, api_id, api_hash) as app:
+        async with Client(name=session_name, api_id=api_id, api_hash=api_hash) as app:
             peer = await app.resolve_peer(bot_username)
 
             bot_input_user = types.InputUser(
@@ -109,10 +122,8 @@ class GetAccessToken:
     def __init__(self, session_path: Path):
         self.session_path = session_path
 
-    @property
-    async def mrkt(self):
-        mrkt = await mrkt_(self.session_path)
-        return mrkt
+    async def mrkt(self) -> str:
+        return await mrkt_(self.session_path)
 
 
 

@@ -1,4 +1,6 @@
 import asyncio
+from aiolimiter import AsyncLimiter
+
 import aiohttp
 import logging
 from typing import Any
@@ -14,6 +16,7 @@ from datetime import datetime
 from itertools import cycle
 
 
+limiter = AsyncLimiter(15, 1)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
@@ -64,10 +67,19 @@ class MRKT:
 
 
 
-    async def update_parse_sessions(self):
-        if self.sessions:
-            for session in self.sessions:
+    async def close_sessions(self) -> None:
+        for session in self.sessions:
+            if session and not session.closed:
                 await session.close()
+        self.sessions = []
+
+        if self.buy_session and not self.buy_session.closed:
+            await self.buy_session.close()
+        self.buy_session = None
+
+
+    async def update_parse_sessions(self):
+        await self.close_sessions()
 
         tokens = self.tokens
         self.sessions = []
@@ -76,9 +88,6 @@ class MRKT:
             headers = await self.get_parse_headers(token)
             session = aiohttp.ClientSession(headers=headers)
             self.sessions.append(session)
-
-        if self.buy_session:
-            await self.buy_session.close()
 
         self.buy_session = aiohttp.ClientSession(headers=self.buy_headers)
 
@@ -144,7 +153,7 @@ class MRKT:
 
 
     async def change(self, gift: Gift, c_type: str):
-        text = (f"<a href='https://t.me/nft/{gift.gift_name}-'>GIFT<a>"
+        text = (f"<a href='https://t.me/nft/{gift.gift_name}-'>GIFT</a>\n"
                 f"Type: {c_type}\n"
                 f"Price: {gift.price}\n\n"
                 f"Collection: {gift.collection}\n"
@@ -152,7 +161,9 @@ class MRKT:
                 f"Backdrop: {gift.backdrop}\n"
                 f"Pattern: {gift.pattern}")
 
-        await self.bot.send_message(chat_id=CHANGES_CHAT, text=text, message_thread_id=CHANGES_CHAT_MRKT)
+        async with limiter:
+            return 0
+            #return await self.bot.send_message(chat_id=CHANGES_CHAT, text=text, message_thread_id=CHANGES_CHAT_MRKT)
 
 
     async def process_feed_item(self, item: dict[str, Any], index: SubscriptionIndex, buy_session: aiohttp.ClientSession) -> None:
@@ -173,7 +184,7 @@ class MRKT:
                 backdrop=gift_data.get("backdropName"),
                 pattern=gift_data.get("symbolName"),
                 price=price_ton,
-                gift_id=str(item.get("gift").get("id")),
+                gift_id=gift_data.get("id"),
                 gift_name=gift_data.get("name", "PlushPepe-1")
             )
 
@@ -181,8 +192,8 @@ class MRKT:
             matches = index.find_matches(gift)
             if matches:
                 logging.info(
-                    f"-----------------------------------"
-                    f"🎯 [MATCH]"
+                    f"-----------------------------------\n"
+                    f"🎯 [MATCH]\n"
                     f"Type: {event_type}\n"
                     f"Price: {gift.price}\n"
                     f"Collection: {gift.collection}\n"
@@ -195,6 +206,7 @@ class MRKT:
 
                 sub = matches[0]
                 asyncio.create_task(self.execute_buy(sub=sub, gift=gift, buy_session=buy_session))
+            await self.change(gift=gift, c_type=event_type)
         except Exception as e:
             logging.error(f" Ошибка при разборе айтема ленты MRKT: {e}", exc_info=True)
 
@@ -225,7 +237,7 @@ class MRKT:
                     response.raise_for_status()
                     res_data = await response.json()
                     if not res_data:
-                        logging.error(f"❌ [BUY FAILED] Не успели походу")
+                        logging.error(f"❌ [BUY FAILED] Не успели")
                         return
                     logging.info(f"✅ [SUCCESS] Покупка успешно совершена! Ответ сервера: {res_data}")
                     text = (
@@ -249,33 +261,38 @@ class MRKT:
 
 
 
-    async def pooling(self):
+    async def pooling(self, index: SubscriptionIndex | None = None):
         logging.info(" MRKT | Начинаю pooling...")
         init_db()
-        index = SubscriptionIndex.load_from_db()
+        if index is None:
+            index = SubscriptionIndex.load_from_db()
 
         processed_event_ids: set[str] = set()
         is_first_run = True
 
-        for session in cycle(self.sessions):
-            data = await self.fetch_feed_page(session)
+        try:
+            for session in cycle(self.sessions):
+                data = await self.fetch_feed_page(session)
 
-            if data and "items" in data:
-                items = data.get("items", [])
+                if data and "items" in data:
+                    items = data.get("items", [])
 
-                for item in reversed(items):
-                    event_id = str(item.get("id"))
+                    for item in reversed(items):
+                        event_id = str(item.get("id"))
 
-                    if event_id not in processed_event_ids:
-                        processed_event_ids.add(event_id)
+                        if event_id not in processed_event_ids:
+                            processed_event_ids.add(event_id)
 
-                        if not is_first_run:
-                            asyncio.create_task(self.process_feed_item(item=item, index=index, buy_session=self.buy_session))
+                            if not is_first_run:
+                                asyncio.create_task(self.process_feed_item(item=item, index=index, buy_session=self.buy_session))
 
 
-                is_first_run = False
+                    is_first_run = False
 
-                if len(processed_event_ids) > 500:
-                    processed_event_ids = set(list(processed_event_ids)[-200:])
+                    if len(processed_event_ids) > 500:
+                        processed_event_ids = set(list(processed_event_ids)[-200:])
 
-            await asyncio.sleep(self.poll_delay)
+                await asyncio.sleep(self.poll_delay)
+        except asyncio.CancelledError:
+            logging.info("MRKT | Остановка pooling...")
+            raise

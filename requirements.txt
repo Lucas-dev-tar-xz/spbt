@@ -1,0 +1,9 @@
+asyncio==4.0.0
+aiogram==3.24.0
+python-dotenv==1.2.2
+aiohttp==3.11.18
+aiolimiter==1.2.1
+DateTime==6.0
+APScheduler==3.11.2
+httpx==0.28.1
+Pyrogram==2.0.106

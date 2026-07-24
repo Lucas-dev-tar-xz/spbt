@@ -7,3 +7,5 @@ DateTime==6.0
 APScheduler==3.11.2
 httpx==0.28.1
 Pyrogram==2.0.106
+curl_cffi==0.15.0
+pycryptodome==3.23.0

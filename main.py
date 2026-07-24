@@ -1,67 +1,102 @@
 import asyncio
 import logging
+from contextlib import suppress
 
 from sessions import GetAccessToken #, send_start
 from pathlib import Path
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from parser import MRKT, PORTALS
+from parser import MRKT, PORTALS, TONNEL
 from subs import SubscriptionIndex, init_db
+from buy_tokens import (
+    BUY_SESSION,
+    init_buy_tokens_db,
+    load_buy_tokens,
+    register_parsers,
+    resolve_buy_tokens,
+)
 
 from bot import bot, run_bot
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 SESSIONS_DIR = Path(__file__).resolve().parent / "sessions"
-
+TOKEN_REFRESH_HOURS = 3
 
 mrkt_tokens = []
 portals_tokens = []
 tonnel_tokens = []
 
+mrkt: MRKT | None = None
+portals: PORTALS | None = None
+tonnel: TONNEL | None = None
+scheduler: AsyncIOScheduler | None = None
+
+
+async def _cancel_tasks(tasks: list[asyncio.Task]) -> None:
+    for task in tasks:
+        if not task.done():
+            task.cancel()
+    for task in tasks:
+        with suppress(asyncio.CancelledError):
+            await task
+
+
+async def _run_until_shutdown(*tasks: asyncio.Task) -> None:
+    try:
+        await asyncio.gather(*tasks)
+    except asyncio.CancelledError:
+        logging.info("Получен сигнал остановки (Ctrl+C)...")
+        raise
+    finally:
+        await _cancel_tasks(list(tasks))
+
 
 
 async def init_starting_sniper():
-    global mrkt_tokens
-    global portals_tokens
-    global tonnel_tokens
+    global mrkt, portals, tonnel, scheduler
 
     init_db()
+    init_buy_tokens_db()
     index = SubscriptionIndex.load_from_db()
 
-    #t_update_tokens = asyncio.create_task(update_tokens())
-    t_workers = asyncio.create_task(workers())
-    mrkt_tokens = ['da1d9ce0-cbee-41af-b4b7-567f610984f9', 'd04f532f-1bc9-4312-a25f-42671d53a8fa', '003e5d96-8855-48d8-8e4d-391387302556', '825d639e-e09d-43ce-9238-3605183cbbb0', 'efaeaff5-9427-4e08-ba66-6f20a1f1f3f5', 'e73b6037-5a1d-4ecc-b3b2-182ded1abb64', '6e902ed1-41da-4183-b7c1-786397f48f3e', '1719f5be-6d26-4a9b-bf7a-24cb259c06f8']
-    portals_tokens = ['user=%7B%22id%22%3A8499324587%2C%22first_name%22%3A%22Eylcqwhy%22%2C%22last_name%22%3A%22Irkcfkger%22%2C%22language_code%22%3A%22en%22%2C%22allows_write_to_pm%22%3Atrue%2C%22photo_url%22%3A%22https%3A%5C%2F%5C%2Ft.me%5C%2Fi%5C%2Fuserpic%5C%2F320%5C%2FjV5WM2HfaLBhRJx-H6pVQc5Ug68AJnnSYSby5feLLbgVrIVTXlGRQ1RZZorwoKZq.svg%22%7D&chat_instance=-187287761988689160&chat_type=sender&auth_date=1784468875&signature=dmnl3of-DSnrdJOi0zybfjYkKhNZANn_Dv3B-Wt9os8-CZHofjt2zlHrjCl4F8peuAc-v0dGhP28uu9QvPQaDg&hash=9deba20f7efa3edf6522143fac1fa46dcf1bcce8c66601b1449d06355f14c273', 'user=%7B%22id%22%3A8960845243%2C%22first_name%22%3A%22Evcmzbocp%22%2C%22last_name%22%3A%22Fnvlbjvh%22%2C%22language_code%22%3A%22en%22%2C%22allows_write_to_pm%22%3Atrue%2C%22photo_url%22%3A%22https%3A%5C%2F%5C%2Ft.me%5C%2Fi%5C%2Fuserpic%5C%2F320%5C%2F0P0nNN3kO13ku-v0MOQ93I3D5y7HbGIat4zl90By_RW-8lFj5IjTedJlHp4eLlvR.svg%22%7D&chat_instance=-545744855795923050&chat_type=sender&auth_date=1784468880&signature=8jkq5B9iHP8BqU0Pa8ZOJxUyjMbQwKFsUbup0jkn7RX55MecW4xm4lJCsxIC20WuHpul-Vg3qKxbEmJ-BDbHCQ&hash=dbc9d2b11a775d2571fddc82ea06d5b6914d7c44a44f8e6606d8d17a6a60f5cd', 'user=%7B%22id%22%3A8639256882%2C%22first_name%22%3A%22Otzsgoyhxf%22%2C%22last_name%22%3A%22Kjrsozm%22%2C%22language_code%22%3A%22en%22%2C%22allows_write_to_pm%22%3Atrue%2C%22photo_url%22%3A%22https%3A%5C%2F%5C%2Ft.me%5C%2Fi%5C%2Fuserpic%5C%2F320%5C%2F_Z54KKT_ktyIcEB2tTBtAJI1gMQ4v9--OFzrICl9d9Fy2ERj2P7WU-GU2WBBu7uP.svg%22%7D&chat_instance=3357285449342166869&chat_type=sender&auth_date=1784468885&signature=dS_JKcWwXmRTp-_gxED1pyFp2t_t6QLVAf9pr3qF37M3eO_4CtnE0DEj5klLG53Zgjt54LDmLqGuRWqx1Pa5Bw&hash=e9bce15094326bc2ac56f7cc2063c00390cef6e6584f4b36a1fe2be0c6f83ff3', 'user=%7B%22id%22%3A8847053015%2C%22first_name%22%3A%22Lysgtyv%22%2C%22last_name%22%3A%22Ljimyji%22%2C%22language_code%22%3A%22en%22%2C%22allows_write_to_pm%22%3Atrue%2C%22photo_url%22%3A%22https%3A%5C%2F%5C%2Ft.me%5C%2Fi%5C%2Fuserpic%5C%2F320%5C%2Fbd8pWh95LLU2Vz5zzvFyAbMTizFlONEJg6e6I4BTE7yymoaPZyX3sgU4zrThvNd8.svg%22%7D&chat_instance=-1886900002058415822&chat_type=sender&auth_date=1784468890&signature=4Um8xavLYB7Sw4Hm53XZntKs4dNFw4hNgJqujrfu6NOOPw7wfmtNlt-VGxe-Rg5Qrir9updmFXd7msYJyXD6Dw&hash=e43d74059a5ffb0079b7d738dcbddf4488779cbf2d3351a31d71931e9589be47', 'user=%7B%22id%22%3A8954575948%2C%22first_name%22%3A%22Xzvjvrg%22%2C%22last_name%22%3A%22Nstopdhisi%22%2C%22language_code%22%3A%22en%22%2C%22allows_write_to_pm%22%3Atrue%2C%22photo_url%22%3A%22https%3A%5C%2F%5C%2Ft.me%5C%2Fi%5C%2Fuserpic%5C%2F320%5C%2F3_W7nuTV1Hd0EyRtzMZbsAbo3YdD5Yf9JNfLhHLgq15Tw8BFDHhMcO4NyngDLdZn.svg%22%7D&chat_instance=8352236978508663024&chat_type=sender&auth_date=1784468895&signature=B0BDRWODaiIwPB2YBbiD_kllN8SUi7FNgqrY_jH8UPDeTkF8nPqplQjX9HEPnGys4RKm4bINuujSglsT0YEsAA&hash=ad8e6bd6af3c681c7b56ccb5b967efd3095cfaf7f1d3a9d6439ebd7fb12db78e', 'user=%7B%22id%22%3A8677609089%2C%22first_name%22%3A%22Pgygbdqqwh%22%2C%22last_name%22%3A%22Mhjkwsw%22%2C%22language_code%22%3A%22en%22%2C%22allows_write_to_pm%22%3Atrue%2C%22photo_url%22%3A%22https%3A%5C%2F%5C%2Ft.me%5C%2Fi%5C%2Fuserpic%5C%2F320%5C%2Fm6idgJfTJ3URFPZ6LGbvg2xyVhXKojoH979aW3RdJP4PdpB1p8ixsc7N7eke2IGx.svg%22%7D&chat_instance=3987120483861772860&chat_type=sender&auth_date=1784468900&signature=E5sKI7wgpGU7c5CLc7LL0g-EtKXR_8Y4Ox31YFnOB_gqDZFOUGcF7k75AGJCHcnC-YqF3GJspFgwx4VtQi2vAw&hash=b45a8b1da287345583fadc2f6d71523fce723bfa29c539d0a5a14678a3c24d04', 'user=%7B%22id%22%3A8864901554%2C%22first_name%22%3A%22Bnipuc%22%2C%22last_name%22%3A%22Vxzbjuwgx%22%2C%22language_code%22%3A%22en%22%2C%22allows_write_to_pm%22%3Atrue%2C%22photo_url%22%3A%22https%3A%5C%2F%5C%2Ft.me%5C%2Fi%5C%2Fuserpic%5C%2F320%5C%2F2XuFApopmd_T2CgQG3eGSgxiSq_-gPC3SFQQmCWyHmLUf_HU2O5KbmfR65lASPhS.svg%22%7D&chat_instance=-1933637180793937841&chat_type=sender&auth_date=1784468905&signature=uwwGzLQqOgCjY-fdBysm2Gu7jjcr7GaVcb7Pjj-SwfsBzUL5lQOR1FsSOQt6OV_s1MnNbwHbv2DMBXUJaxFYCA&hash=5f86cad3f701c930fa7af6a5d5d455f6efe1ecb51e9d7d62cc5aadbe4d2af79b', 'user=%7B%22id%22%3A8623074750%2C%22first_name%22%3A%22Zefaawj%22%2C%22last_name%22%3A%22Wbwenviaz%22%2C%22language_code%22%3A%22en%22%2C%22allows_write_to_pm%22%3Atrue%2C%22photo_url%22%3A%22https%3A%5C%2F%5C%2Ft.me%5C%2Fi%5C%2Fuserpic%5C%2F320%5C%2FAf4tuRVm51QNHD4mqck1wIyR5L3xnH-24P_3prnLBLXDJix93GgvxEqJbEkBitqH.svg%22%7D&chat_instance=-1591702332820171052&chat_type=sender&auth_date=1784468911&signature=rz4azXlSf9nkBkEOYwjp3W5-Lrlas8i_mESGIf-gUagc6wQQyu0eJMfB0s2dPX2DJCCCvke0otOngt7DkLCODA&hash=ff8fa8749a95570988177367602082a2bb7a8a4e43eb151abb43305ae66e1a66']
+    session_buy_tokens = await fetch_session_buy_tokens()
+    buy_tokens = await resolve_buy_tokens(fallback=session_buy_tokens)
 
-    await asyncio.gather(t_workers) # await asyncio.gather(t_update_tokens, t_workers)
+    await fetch_all_tokens()
 
-    print(mrkt_tokens)
-    print(portals_tokens)
-
-
-    # ---------- Create Classes ---------- #
-    mrkt = MRKT(bot=bot, tokens=mrkt_tokens, buy_token="f80efbfe-133b-4489-b5cd-ee5a8cdeb9d5", poll_delay=0.2)
+    mrkt = MRKT(bot=bot, tokens=mrkt_tokens, buy_token=buy_tokens.get("mrkt", ""), poll_delay=0.2)
     await mrkt.update_parse_sessions()
 
-    portals = PORTALS(bot=bot, tokens=portals_tokens, buy_token="query_id=AAEXn24_AgAAABefbj9QytNT&user=%7B%22id%22%3A5359181591%2C%22first_name%22%3A%22Lucas%20%5BLux%5D%22%2C%22last_name%22%3A%22%22%2C%22username%22%3A%22Lcs_Dev%22%2C%22language_code%22%3A%22ru%22%2C%22is_premium%22%3Atrue%2C%22allows_write_to_pm%22%3Atrue%2C%22photo_url%22%3A%22https%3A%5C%2F%5C%2Ft.me%5C%2Fi%5C%2Fuserpic%5C%2F320%5C%2Fn_ScL8h4Z6CCDOksKKH9vBt0qsE3ckMsdn8Wna6_KrYfO65lBFt4PBCOV0GSq5r_.svg%22%7D&auth_date=1784468696&signature=l1E3jvKiafwdziEvJPk9GqqTJkGLmEkPzr00qUCPvzvSDG0nujHm_Wxvm1YwYgOp091DMrYBUeOpzC5xyP2oDg&hash=aae5b79716e90106b1517a6a7f0be4cb6507c5bfe6e5250e29111919c2dfd509", poll_delay=0.1)
+    portals = PORTALS(bot=bot, tokens=portals_tokens, buy_token=buy_tokens.get("portals", ""), poll_delay=0.1)
     await portals.update_parse_sessions()
+
+    tonnel = TONNEL(bot=bot, tokens=tonnel_tokens, buy_token=buy_tokens.get("tonnel", ""), poll_delay=0.5)
+    await tonnel.init()
+
+    register_parsers(mrkt, portals, tonnel)
+
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(
+        func=refresh_tokens,
+        trigger="interval",
+        hours=TOKEN_REFRESH_HOURS,
+    )
+    scheduler.start()
+    logging.info(f"Автообновление токенов каждые {TOKEN_REFRESH_HOURS} ч.")
 
     # ---------- Pooling + Bot ---------- #
     task_bot = asyncio.create_task(run_bot(index))
     task_mrkt = asyncio.create_task(mrkt.pooling(index=index))
     task_portals = asyncio.create_task(portals.pooling(index=index))
+    task_tonnel = asyncio.create_task(tonnel.pooling(index=index))
 
     try:
-        await asyncio.gather(task_bot, task_mrkt, task_portals)
+        await _run_until_shutdown(task_bot, task_mrkt, task_portals, task_tonnel)
     finally:
-        for task in (task_bot, task_mrkt, task_portals):
-            if not task.done():
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
+        if scheduler and scheduler.running:
+            scheduler.shutdown(wait=False)
+            logging.info("Scheduler остановлен")
 
         await mrkt.close_sessions()
         logging.info("MRKT | Все HTTP-сессии закрыты")
@@ -69,13 +104,27 @@ async def init_starting_sniper():
         await portals.close_sessions()
         logging.info("PORTALS | Все HTTP-сессии закрыты")
 
+        await tonnel.close_sessions()
+        logging.info("TONNEL | Все HTTP-сессии закрыты")
 
 
 
-async def update_tokens():
-    global mrkt_tokens
-    global portals_tokens
-    global tonnel_tokens
+
+async def fetch_session_buy_tokens() -> dict[str, str | None]:
+    buy_mrkt = buy_portals = buy_tonnel = None
+    session_path = SESSIONS_DIR / f"{BUY_SESSION}.session"
+    if not session_path.exists():
+        return {"mrkt": None, "portals": None, "tonnel": None}
+
+    session = GetAccessToken(session_path)
+    buy_mrkt = await session.mrkt()
+    buy_portals = await session.portals()
+    buy_tonnel = await session.tonnel()
+    return {"mrkt": buy_mrkt, "portals": buy_portals, "tonnel": buy_tonnel}
+
+
+async def fetch_all_tokens():
+    global mrkt_tokens, portals_tokens, tonnel_tokens
 
     mrkt_tokens = []
     portals_tokens = []
@@ -96,22 +145,46 @@ async def update_tokens():
         if portals_token:
             portals_tokens.append(portals_token)
 
-        """# TODO tonnel"""
+        tonnel_token = await session.tonnel()
+        if tonnel_token:
+            tonnel_tokens.append(tonnel_token)
 
-
-async def workers():
-    # ---------- Scheduler ---------- #
-    scheduler = AsyncIOScheduler()
-
-    # ---------- Update Tokens ---------- #
-    scheduler.add_job(
-        func=update_tokens,
-        trigger="interval",
-        hours=12
+    logging.info(
+        "Токены получены: MRKT=%s, PORTALS=%s, TONNEL=%s",
+        len(mrkt_tokens), len(portals_tokens), len(tonnel_tokens),
     )
 
-    # ---------- Run Worker ---------- #
-    scheduler.start()
+
+async def apply_tokens_to_parsers():
+    buy_tokens = load_buy_tokens()
+
+    if mrkt:
+        await mrkt.update_tokens(mrkt_tokens)
+        if buy_tokens.get("mrkt"):
+            await mrkt.update_buy_token(buy_tokens["mrkt"])
+            mrkt.buy_headers["Authorization"] = buy_tokens["mrkt"]
+            mrkt.buy_headers["Cookie"] = f"access_token={buy_tokens['mrkt']}"
+        await mrkt.update_parse_sessions()
+
+    if portals:
+        await portals.update_tokens(portals_tokens)
+        if buy_tokens.get("portals"):
+            await portals.update_buy_token(buy_tokens["portals"])
+            portals.buy_headers["Authorization"] = f"tma {buy_tokens['portals']}"
+        await portals.update_parse_sessions()
+
+    if tonnel:
+        tonnel.tokens = tonnel_tokens
+        if buy_tokens.get("tonnel"):
+            tonnel.buy_token = buy_tokens["tonnel"]
+        await tonnel.update_parse_jsons()
+
+
+async def refresh_tokens():
+    logging.info("Запуск автообновления токенов...")
+    await fetch_all_tokens()
+    await apply_tokens_to_parsers()
+    logging.info("Токены обновлены и применены к парсерам")
 
 
 

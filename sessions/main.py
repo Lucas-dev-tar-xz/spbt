@@ -118,7 +118,6 @@ async def mrkt_(session_path: Path, api_id: int | None = None, api_hash: str | N
     return token
 
 
-
 async def portals_(session_path: Path, api_id: int | None = None, api_hash: str | None = None):
     portals = config.Bots.portals
     directory = session_path.parent
@@ -175,6 +174,62 @@ async def portals_(session_path: Path, api_id: int | None = None, api_hash: str 
     return token
 
 
+async def tonnel_(session_path: Path, api_id: int | None = None, api_hash: str | None = None):
+    tonnel = config.Bots.tonnel
+    directory = session_path.parent
+    name_num = session_path.stem
+    session_name = str(directory / name_num)
+    account_json = directory / f"{name_num}.json"
+
+    if account_json.exists():
+        with open(account_json, "r") as file:
+            data = json.load(file)
+        api_id = api_id or data.get("api_id", 2040)
+        api_hash = api_hash or data.get("api_hash", "b18441a1ff607e10a989891a5462e627")
+    else:
+        api_id = api_id or 2040
+        api_hash = api_hash or "b18441a1ff607e10a989891a5462e627"
+
+    async def get_init_data(bot_username: str, app_short_name: str):
+        async with Client(name=session_name, api_id=api_id, api_hash=api_hash) as app:
+            peer = await app.resolve_peer(bot_username)
+
+            bot_input_user = types.InputUser(
+                user_id=peer.user_id,
+                access_hash=peer.access_hash,
+            )
+
+            web_view = await app.invoke(
+                functions.messages.RequestAppWebView(
+                    peer=peer,
+                    app=types.InputBotAppShortName(
+                        bot_id=bot_input_user,
+                        short_name=app_short_name,
+                    ),
+                    platform="android",
+                    write_allowed=True
+                )
+            )
+
+            web_app_url = web_view.url
+            fragment = web_app_url.split("#", 1)[1]
+            params = urllib.parse.parse_qs(fragment)
+            return params["tgWebAppData"][0]
+
+
+    async def create_access_token():
+        try:
+            init_data = await get_init_data(bot_username=tonnel.bot_username, app_short_name=tonnel.app_short_name)
+
+            return init_data
+        except Exception as e:
+            logging.error(f"[Create tonnel token] {e}")
+
+
+    token = await create_access_token()
+    return token
+
+
 
 class GetAccessToken:
     def __init__(self, session_path: Path):
@@ -186,6 +241,10 @@ class GetAccessToken:
 
     async def portals(self) -> str:
         return await portals_(self.session_path)
+
+
+    async def tonnel(self) -> str:
+        return await tonnel_(self.session_path)
 
 
 
@@ -253,7 +312,9 @@ async def send_start(n: int = None):
 
 
 async def main():
-    await send_start()
+    session = GetAccessToken(Path("1.session"))
+    tonnel = await session.tonnel()
+    print(tonnel)
 
 
 if __name__ == '__main__':

@@ -6,6 +6,15 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from config import ADMIN_USER_ID
+from buy_tokens import (
+    BUY_SESSION,
+    MARKET_LABELS,
+    apply_buy_token,
+    fetch_buy_token_from_session,
+    format_buy_tokens_status,
+    get_buy_token,
+    mask_token,
+)
 from subs import (
     SubscriptionIndex,
     create_subscription,
@@ -16,6 +25,8 @@ from subs import (
 )
 
 from .keyboards import (
+    buy_token_detail_kb,
+    buy_tokens_menu_kb,
     cancel_kb,
     confirm_delete_kb,
     main_menu_kb,
@@ -23,7 +34,7 @@ from .keyboards import (
     subscription_detail_kb,
     subscriptions_list_kb,
 )
-from .states import AddSubscription
+from .states import AddSubscription, EditBuyToken
 
 router = Router(name="subscriptions")
 logger = logging.getLogger(__name__)
@@ -75,7 +86,10 @@ async def cmd_cancel(message: Message, state: FSMContext) -> None:
         await message.answer("Нечего отменять.", reply_markup=main_menu_kb())
         return
     await state.clear()
-    await message.answer("❌ Добавление подписки отменено.", reply_markup=main_menu_kb())
+    if current and current.startswith("EditBuyToken"):
+        await message.answer("❌ Изменение токена отменено.", reply_markup=main_menu_kb())
+    else:
+        await message.answer("❌ Добавление подписки отменено.", reply_markup=main_menu_kb())
 
 
 @router.message(F.text == "ℹ️ Помощь")
@@ -95,7 +109,110 @@ async def cmd_help(message: Message) -> None:
         "/start — главное меню\n"
         "/subs — список подписок\n"
         "/add — добавить подписку\n"
+        "/tokens — buy-токены маркетов\n"
         "/cancel — отменить текущее действие",
+        reply_markup=main_menu_kb(),
+    )
+
+
+@router.message(F.text == "🔑 Токены")
+@router.message(Command("tokens"))
+async def cmd_tokens(message: Message) -> None:
+    await message.answer(
+        format_buy_tokens_status() + "\n\nВыбери маркет:",
+        reply_markup=buy_tokens_menu_kb(),
+    )
+
+
+@router.callback_query(F.data == "buy_tokens_menu")
+async def cb_buy_tokens_menu(query: CallbackQuery) -> None:
+    await query.message.edit_text(
+        format_buy_tokens_status() + "\n\nВыбери маркет:",
+        reply_markup=buy_tokens_menu_kb(),
+    )
+    await query.answer()
+
+
+@router.callback_query(F.data.startswith("buy_token:"))
+async def cb_buy_token_detail(query: CallbackQuery) -> None:
+    market = query.data.split(":")[1]
+    label = MARKET_LABELS.get(market, market.upper())
+    token = get_buy_token(market)
+
+    await query.message.edit_text(
+        f"🔑 <b>{label}</b> buy-токен\n\n"
+        f"Текущий: <code>{mask_token(token)}</code>",
+        reply_markup=buy_token_detail_kb(market),
+    )
+    await query.answer()
+
+
+@router.callback_query(F.data.startswith("buy_token_edit:"))
+async def cb_buy_token_edit(query: CallbackQuery, state: FSMContext) -> None:
+    market = query.data.split(":")[1]
+    label = MARKET_LABELS.get(market, market.upper())
+
+    await state.set_state(EditBuyToken.waiting_token)
+    await state.update_data(market=market)
+
+    await query.message.answer(
+        f"✏️ Отправь новый buy-токен для <b>{label}</b>.\n\n"
+        "Можно вставить полный токен одним сообщением.",
+        reply_markup=cancel_kb(),
+    )
+    await query.answer()
+
+
+@router.callback_query(F.data.startswith("buy_token_session:"))
+async def cb_buy_token_from_session(query: CallbackQuery) -> None:
+    market = query.data.split(":")[1]
+    label = MARKET_LABELS.get(market, market.upper())
+
+    await query.answer("Получаю токен из сессии...")
+    token = await fetch_buy_token_from_session(market)
+    if not token:
+        await query.message.answer(
+            f"⚠️ Не удалось получить токен {label} из сессии {BUY_SESSION}.",
+            reply_markup=main_menu_kb(),
+        )
+        return
+
+    applied = await apply_buy_token(market, token)
+    status = "применён" if applied else "сохранён (снайпер не запущен)"
+    await query.message.answer(
+        f"✅ {label} buy-токен обновлён из сессии и {status}.\n\n"
+        f"Новый: <code>{mask_token(token)}</code>",
+        reply_markup=main_menu_kb(),
+    )
+
+
+@router.message(EditBuyToken.waiting_token)
+async def edit_buy_token(message: Message, state: FSMContext) -> None:
+    if message.text and message.text.strip().lower() in CANCEL_WORDS:
+        await state.clear()
+        await message.answer("❌ Изменение токена отменено.", reply_markup=main_menu_kb())
+        return
+
+    token = (message.text or "").strip()
+    if len(token) < 10:
+        await message.answer("⚠️ Токен слишком короткий. Отправь полный buy-токен.", reply_markup=cancel_kb())
+        return
+
+    data = await state.get_data()
+    market = data.get("market")
+    await state.clear()
+
+    if market not in MARKET_LABELS:
+        await message.answer("⚠️ Неизвестный маркет.", reply_markup=main_menu_kb())
+        return
+
+    label = MARKET_LABELS[market]
+    applied = await apply_buy_token(market, token)
+    status = "применён" if applied else "сохранён (снайпер не запущен)"
+
+    await message.answer(
+        f"✅ {label} buy-токен {status}.\n\n"
+        f"Новый: <code>{mask_token(token)}</code>",
         reply_markup=main_menu_kb(),
     )
 

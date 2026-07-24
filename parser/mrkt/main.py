@@ -56,7 +56,7 @@ class MRKT:
         }
 
         self.buy_headers = {
-           "Authorization": self.buy_token,
+            "Authorization": self.buy_token,
             "Cookie": f"access_token={self.buy_token}",
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
             "Content-Type": "application/json",

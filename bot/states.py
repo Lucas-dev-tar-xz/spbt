@@ -7,3 +7,7 @@ class AddSubscription(StatesGroup):
     backdrop = State()
     pattern = State()
     max_price = State()
+
+
+class EditBuyToken(StatesGroup):
+    waiting_token = State()

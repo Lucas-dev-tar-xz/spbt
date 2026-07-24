@@ -7,9 +7,32 @@ def main_menu_kb() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="📋 Подписки"), KeyboardButton(text="➕ Добавить")],
-            [KeyboardButton(text="ℹ️ Помощь"), KeyboardButton(text="📊 Статистика")],
+            [KeyboardButton(text="🔑 Токены"), KeyboardButton(text="📊 Статистика")],
+            [KeyboardButton(text="ℹ️ Помощь")],
         ],
         resize_keyboard=True,
+    )
+
+
+def buy_tokens_menu_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="MRKT", callback_data="buy_token:mrkt"),
+                InlineKeyboardButton(text="PORTALS", callback_data="buy_token:portals"),
+                InlineKeyboardButton(text="TONNEL", callback_data="buy_token:tonnel"),
+            ],
+        ]
+    )
+
+
+def buy_token_detail_kb(market: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="✏️ Изменить", callback_data=f"buy_token_edit:{market}")],
+            [InlineKeyboardButton(text="🔄 Из сессии", callback_data=f"buy_token_session:{market}")],
+            [InlineKeyboardButton(text="◀️ Назад", callback_data="buy_tokens_menu")],
+        ]
     )
 
 
